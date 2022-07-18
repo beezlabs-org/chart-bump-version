@@ -1,0 +1,60 @@
+name: Chart Bump Version
+description: Action to bump the version of a Helm Chart
+inputs:
+  pat:
+    description: PAT for accessing the application repo
+    required: true
+  new-version:
+    description: The new version to bump to
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        token: ${{ inputs.pat }}
+
+    - name: Set Version ENV
+      run: |
+        echo "APP_VERSION=$(cat VERSION)" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Install gomplate
+      env:
+        CHART_VERSION: ${{ inputs.new-version }}
+      run: |
+        curl -o /usr/local/bin/gomplate -sSL https://github.com/hairyhenderson/gomplate/releases/download/v3.11.1/gomplate_linux-amd64
+        chmod 755 /usr/local/bin/gomplate
+        gomplate -f ./charts/README.tpl -o ./charts/README.md
+      shell: bash
+
+    - name: Bump versions in Chart.yaml
+      run: |
+        yq -i '.version = "${{ inputs.new-version }}"' './charts/Chart.yaml'
+        yq -i '.appVersion = "${{ env.APP_VERSION }}"' './charts/Chart.yaml'
+      shell: bash
+    
+    - name: Commit Changes
+      env:
+        GIT_AUTHOR_NAME: Beez Innovation Labs
+        GIT_COMMITTER_NAME: Beez Innovation Labs
+        GIT_AUTHOR_EMAIL: github@beezlabs.com
+        GIT_COMMITTER_EMAIL: github@beezlabs.com
+      run: |
+        git add -A
+        git diff-index --quiet HEAD || git commit -m "feat: bump chart version to ${{ inputs.new-version }}"
+        git push
+      shell: bash
+
+    - name: Create helm package
+      run: |
+        helm package ./charts
+      shell: bash
+
+    - name: Upload package
+      uses: actions/upload-artifact@v3
+      with:
+        name: helm-chart
+        path: ${{ github.event.repository.name }}-${{ inputs.new-version }}.tgz
+        if-no-files-found: error
