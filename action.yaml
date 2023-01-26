@@ -7,6 +7,10 @@ inputs:
   new-version:
     description: The new version to bump to
     required: true
+  create-package:
+    description: Whether to create a helm package
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -48,11 +52,13 @@ runs:
       shell: bash
 
     - name: Create helm package
+      if: ${{ inputs.create-package == 'true' }}
       run: |
         helm package ./charts
       shell: bash
 
     - name: Upload package
+      if: ${{ inputs.create-package == 'true' }}
       uses: actions/upload-artifact@v3
       with:
         name: helm-chart
